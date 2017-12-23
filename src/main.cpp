@@ -33,7 +33,7 @@ int main()
   uWS::Hub h;
 
   PID pid;
-  // TODO: Initialize the pid variable.
+  pid.Init(0.2, 0.004, 3.0);
 
   h.onMessage([&pid](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length, uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
@@ -51,19 +51,27 @@ int main()
           double speed = std::stod(j[1]["speed"].get<std::string>());
           double angle = std::stod(j[1]["steering_angle"].get<std::string>());
           double steer_value;
-          /*
-          * TODO: Calcuate steering value here, remember the steering value is
-          * [-1, 1].
-          * NOTE: Feel free to play around with the throttle and speed. Maybe use
-          * another PID controller to control the speed!
-          */
-          
-          // DEBUG
-          std::cout << "CTE: " << cte << " Steering Value: " << steer_value << std::endl;
+
+          pid.UpdateError(cte);
+          steer_value = pid.TotalError();
+
+          // Correction
+          if (steer_value > 1) {
+            steer_value = 1;
+          }
+          else if (steer_value < -1) {
+            steer_value = -1;
+          }
+
+          // std::cout << "CTE: " << cte << " Steering Value: " << steer_value << std::endl;
+          // std::cout << "angle: " << angle << "  speed: " << speed << std::endl;
 
           json msgJson;
           msgJson["steering_angle"] = steer_value;
-          msgJson["throttle"] = 0.3;
+
+          // making throettle depend on sigmoid function with respect to steering (more steering = lower throttle)
+          msgJson["throttle"] = 0.1*(1+exp(-steer_value)); // 0.1 value by testeing
+          
           auto msg = "42[\"steer\"," + msgJson.dump() + "]";
           std::cout << msg << std::endl;
           ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
@@ -101,12 +109,10 @@ int main()
   });
 
   int port = 4567;
-  if (h.listen(port))
-  {
+  if (h.listen(port)) {
     std::cout << "Listening to port " << port << std::endl;
   }
-  else
-  {
+  else {
     std::cerr << "Failed to listen to port" << std::endl;
     return -1;
   }
